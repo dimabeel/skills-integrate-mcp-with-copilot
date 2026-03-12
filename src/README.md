@@ -5,7 +5,8 @@ A super simple FastAPI application that allows students to view and sign up for 
 ## Features
 
 - View all available extracurricular activities
-- Sign up for activities
+- Advisor login/logout
+- Advisor-only sign up and unregister actions
 
 ## Getting Started
 
@@ -30,7 +31,17 @@ A super simple FastAPI application that allows students to view and sign up for 
 | Method | Endpoint                                                          | Description                                                         |
 | ------ | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
 | GET    | `/activities`                                                     | Get all activities with their details and current participant count |
-| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity                                             |
+| POST   | `/auth/advisor/login`                                             | Login as advisor and get a session token                            |
+| POST   | `/auth/advisor/logout`                                            | Logout advisor by invalidating session token                        |
+| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity (advisor token required)                    |
+| DELETE | `/activities/{activity_name}/unregister?email=student@mergington.edu` | Unregister student from an activity (advisor token required)    |
+
+### Advisor credentials for local exercise
+
+- Username: `advisor1`, Password: `teach123`
+- Username: `advisor2`, Password: `mentor123`
+
+Protected endpoints require the `X-Advisor-Token` header.
 
 ## Data Model
 

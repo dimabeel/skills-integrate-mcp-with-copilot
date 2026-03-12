@@ -3,6 +3,67 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const advisorStatus = document.getElementById("advisor-status");
+  const advisorLoginForm = document.getElementById("advisor-login-form");
+  const advisorUsernameInput = document.getElementById("advisor-username");
+  const advisorPasswordInput = document.getElementById("advisor-password");
+  const advisorLogoutBtn = document.getElementById("advisor-logout-btn");
+
+  let advisorToken = localStorage.getItem("advisorToken") || "";
+  let advisorUsername = localStorage.getItem("advisorUsername") || "";
+
+  function getAuthHeaders() {
+    if (!advisorToken) {
+      return {};
+    }
+
+    return {
+      "X-Advisor-Token": advisorToken,
+    };
+  }
+
+  function setAdvisorSession(token, username) {
+    advisorToken = token;
+    advisorUsername = username;
+    localStorage.setItem("advisorToken", token);
+    localStorage.setItem("advisorUsername", username);
+    renderAdvisorStatus();
+  }
+
+  function clearAdvisorSession() {
+    advisorToken = "";
+    advisorUsername = "";
+    localStorage.removeItem("advisorToken");
+    localStorage.removeItem("advisorUsername");
+    renderAdvisorStatus();
+  }
+
+  function renderAdvisorStatus() {
+    const isLoggedIn = Boolean(advisorToken);
+    advisorStatus.textContent = isLoggedIn
+      ? `Logged in as advisor: ${advisorUsername}`
+      : "Not logged in as advisor";
+    advisorStatus.className = isLoggedIn ? "success" : "info";
+    advisorLogoutBtn.classList.toggle("hidden", !isLoggedIn);
+  }
+
+  function showMessage(text, type) {
+    messageDiv.textContent = text;
+    messageDiv.className = type;
+    messageDiv.classList.remove("hidden");
+
+    setTimeout(() => {
+      messageDiv.classList.add("hidden");
+    }, 5000);
+  }
+
+  function getFriendlyError(status, detail) {
+    if (status === 401 || status === 403) {
+      return "Advisor authorization failed. Please log in and try again.";
+    }
+
+    return detail || "An error occurred";
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -80,32 +141,22 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: getAuthHeaders(),
         }
       );
 
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        showMessage(result.message, "success");
 
         // Refresh activities list to show updated participants
         fetchActivities();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        showMessage(getFriendlyError(response.status, result.detail), "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to unregister. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to unregister. Please try again.", "error");
       console.error("Error unregistering:", error);
     }
   }
@@ -124,37 +175,83 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: getAuthHeaders(),
         }
       );
 
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        showMessage(result.message, "success");
         signupForm.reset();
 
         // Refresh activities list to show updated participants
         fetchActivities();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        showMessage(getFriendlyError(response.status, result.detail), "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to sign up. Please try again.";
-      messageDiv.className = "error";
-      messageDiv.classList.remove("hidden");
+      showMessage("Failed to sign up. Please try again.", "error");
       console.error("Error signing up:", error);
     }
   });
 
+  advisorLoginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const username = advisorUsernameInput.value.trim();
+    const password = advisorPasswordInput.value;
+
+    try {
+      const response = await fetch("/auth/advisor/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setAdvisorSession(result.token, result.username);
+        advisorPasswordInput.value = "";
+        showMessage("Advisor login successful.", "success");
+      } else {
+        showMessage(result.detail || "Advisor login failed.", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to log in as advisor.", "error");
+      console.error("Error logging in:", error);
+    }
+  });
+
+  advisorLogoutBtn.addEventListener("click", async () => {
+    if (!advisorToken) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/auth/advisor/logout", {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        clearAdvisorSession();
+        showMessage("Advisor logged out.", "success");
+      } else {
+        clearAdvisorSession();
+        showMessage("Session ended. Please log in again.", "info");
+      }
+    } catch (error) {
+      clearAdvisorSession();
+      showMessage("Session ended locally. Please log in again.", "info");
+      console.error("Error logging out:", error);
+    }
+  });
+
   // Initialize app
+  renderAdvisorStatus();
   fetchActivities();
 });
