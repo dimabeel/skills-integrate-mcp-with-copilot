@@ -12,6 +12,25 @@
       <h2>Extracurricular Activities</h2>
     </header>
 
+    <section id="advisor-auth-container">
+      <h3>Advisor Login</h3>
+      <form id="advisor-login-form">
+        <div class="form-group">
+          <label for="advisor-username">Advisor Username:</label>
+          <input type="text" id="advisor-username" required placeholder="advisor1" />
+        </div>
+        <div class="form-group">
+          <label for="advisor-password">Password:</label>
+          <input type="password" id="advisor-password" required placeholder="Enter advisor password" />
+        </div>
+        <div class="advisor-actions">
+          <button type="submit">Log In</button>
+          <button type="button" id="advisor-logout-btn" class="hidden">Log Out</button>
+        </div>
+      </form>
+      <div id="advisor-status" class="info">Not logged in as advisor</div>
+    </section>
+
     <main>
       <section id="activities-container">
         <h3>Available Activities</h3>

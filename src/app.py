@@ -5,10 +5,12 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 import os
+import secrets
 from pathlib import Path
 
 app = FastAPI(title="Mergington High School API",
@@ -18,6 +20,13 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+# In-memory advisor credentials/session store for this exercise.
+advisors = {
+    "advisor1": "teach123",
+    "advisor2": "mentor123",
+}
+advisor_sessions = {}
 
 # In-memory activity database
 activities = {
@@ -78,6 +87,23 @@ activities = {
 }
 
 
+class AdvisorLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def require_advisor(x_advisor_token: str | None) -> str:
+    """Validate advisor session token and return advisor username."""
+    if not x_advisor_token:
+        raise HTTPException(status_code=401, detail="Advisor login required")
+
+    username = advisor_sessions.get(x_advisor_token)
+    if not username:
+        raise HTTPException(status_code=403, detail="Invalid advisor session")
+
+    return username
+
+
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
@@ -88,9 +114,39 @@ def get_activities():
     return activities
 
 
+@app.post("/auth/advisor/login")
+def advisor_login(credentials: AdvisorLoginRequest):
+    """Authenticate advisor and return a session token."""
+    expected_password = advisors.get(credentials.username)
+    if not expected_password or credentials.password != expected_password:
+        raise HTTPException(status_code=401, detail="Invalid advisor credentials")
+
+    token = secrets.token_urlsafe(24)
+    advisor_sessions[token] = credentials.username
+    return {
+        "token": token,
+        "role": "advisor",
+        "username": credentials.username,
+    }
+
+
+@app.post("/auth/advisor/logout")
+def advisor_logout(x_advisor_token: str | None = Header(default=None, alias="X-Advisor-Token")):
+    """Invalidate an advisor session token."""
+    require_advisor(x_advisor_token)
+    advisor_sessions.pop(x_advisor_token, None)
+    return {"message": "Advisor logged out successfully"}
+
+
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
-    """Sign up a student for an activity"""
+def signup_for_activity(
+    activity_name: str,
+    email: str,
+    x_advisor_token: str | None = Header(default=None, alias="X-Advisor-Token"),
+):
+    """Sign up a student for an activity (advisor only)."""
+    require_advisor(x_advisor_token)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -111,8 +167,14 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
-    """Unregister a student from an activity"""
+def unregister_from_activity(
+    activity_name: str,
+    email: str,
+    x_advisor_token: str | None = Header(default=None, alias="X-Advisor-Token"),
+):
+    """Unregister a student from an activity (advisor only)."""
+    require_advisor(x_advisor_token)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
